@@ -19,7 +19,7 @@ type Task struct {
 	UserID			int64		`json:"userId"`
 }
 
-type Respone struct {
+type Response struct {
 	Status 		string 			`json:"status"`
 	Result 		interface{} 	`json:"result"`
 }
@@ -69,9 +69,11 @@ func CreateNewTask(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error Unmarshaling data", err)
 		return 
 	}
-
-	_= db.QueryRow("INSERT INTO `taskManagement`.`task` (`id`, `description`, `priority`, `user_id`) VALUES (?, ?, ?, ?)",task.TaskID, task.Description, task.Priority, task.UserID)
-	// Send back newly created task
+	
+	_= db.QueryRow("INSERT INTO `taskManagement`.`task` (`id`, `description`, `priority`, `user_id`) VALUES (?, ?, ?, ?)",task.TaskID, task.Description, task.Priority, task.UserID).Scan(&task.TaskID, &task.Description, &task.Priority, &task.UserID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(task)
 }
 
 func GetTaskById(w http.ResponseWriter, r * http.Request){
@@ -86,7 +88,7 @@ func GetTaskById(w http.ResponseWriter, r * http.Request){
 	_ = db.QueryRow("SELECT * FROM `taskManagement`.`task` WHERE (id = ?)", taskId).Scan(&task.TaskID, &task.Description, &task.Priority, &task.UserID)
 
 	if task.TaskID == 0 {
-		response := Respone{Status: "Fail", Result: "No such task Exists"}
+		response := Response{Status: "Fail", Result: "No such task Exists"}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
@@ -99,6 +101,8 @@ func GetTaskById(w http.ResponseWriter, r * http.Request){
 }
 
 func UpdateTaskById(w http.ResponseWriter, r *http.Request){
+	params := mux.Vars(r)
+	taskId, _ := strconv.ParseInt(params["taskId"], 0, 0)
 	bytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Println("Error Reading request body", err)
@@ -111,20 +115,39 @@ func UpdateTaskById(w http.ResponseWriter, r *http.Request){
 		fmt.Println("Error unmarshaling data")
 	}
 
-	params := mux.Vars(r)
-	taskId, _ := strconv.ParseInt(params["taskId"], 0, 0)
-
-	_ = db.QueryRow("SELECT `id` FROM `taskManagement`.`task` WHERE (id = ?)", taskId).Scan(&task.TaskID)
-	if task.TaskID == 0 {
-		response := Respone{Status: "Fail", Result: "No such task Exists"}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return 
+	row := db.QueryRow("SELECT `id` FROM `taskManagement`.`task` WHERE (id = ?)", taskId)
+	err = row.Scan(&task.TaskID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			response := Response{Status: "Fail", Result: "No such task Exists"}
+        	w.Header().Set("Content-Type", "application/json")
+        	w.WriteHeader(http.StatusBadRequest)
+        	json.NewEncoder(w).Encode(response)
+        	return
+    	}
+    	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+    	fmt.Println("Error querying database:", err)
+    	return
 	}
 
-	_ = db.QueryRow("UPDATE `taskManagement`.`task` SET `id` = ?, `description` = ?, `priority` = ?, `user_id` = ?", task.TaskID, task.Description, task.Priority, task.UserID)
-	// Send back updated task
+	stmt, err := db.Prepare("UPDATE `taskManagement`.`task` SET `description` = ?, `priority` = ?, `user_id` = ? WHERE `id` = ?")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		fmt.Println("Invalid SQL syntax", err)
+		return 
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(task.Description, task.Priority, task.UserID, taskId)
+	if err != nil {
+		fmt.Println("Error Updating Data in DB", err)
+		return
+	}
+	
+	_ = db.QueryRow("SELECT * FROM `taskManagement`.`task` WHERE (id = ?)", taskId).Scan(&task.TaskID, &task.Description, &task.Priority, &task.UserID)
+	w.Header().Set("Content-Type","application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(task)
 }
 
 func DeleteTaskById(w http.ResponseWriter, r * http.Request) {
@@ -135,7 +158,7 @@ func DeleteTaskById(w http.ResponseWriter, r * http.Request) {
 	_ = db.QueryRow("SELECT `id` FROM `taskManagement`.`task` WHERE (id = ?)", taskId).Scan(&task.TaskID)
 	
 	if task.TaskID == 0 {
-		response := Respone{Status: "Fail", Result: "No such task Exists"}
+		response := Response{Status: "Fail", Result: "No such task Exists"}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)

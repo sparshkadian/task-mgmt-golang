@@ -11,5 +11,5 @@ func RegisterTaskRoutes(r *mux.Router) {
 	r.HandleFunc("/tasks", controllers.CreateNewTask).Methods("POST")
 	r.HandleFunc("/tasks/{taskId}", controllers.GetTaskById).Methods("GET")
 	r.HandleFunc("/tasks/{taskId}", controllers.DeleteTaskById).Methods("DELETE")
-	r.HandleFunc("/tasks/{taskId}", controllers.UpdateTaskById).Methods("PUT")
+	r.HandleFunc("/tasks/{taskId}", controllers.UpdateTaskById).Methods("PATCH")
 }
