@@ -58,12 +58,34 @@ func (user *User) PerformSignup(w http.ResponseWriter) *NewUser{
 			return nil
 		}
 	}
-
 	newUser := NewUser{
 		UserID: user.UserID,
 		Name: user.Name,
 		Email: user.Email,
 	}
-
 	return &newUser
+}
+
+func (user *User) LoginDB() *NewUser {
+	email := user.Email
+	password := user.Password
+	if email == "" || password == "" {
+		fmt.Println("All fields are Required")
+		return nil
+	}
+
+	_ = db.QueryRow("SELECT * FROM `taskManagement`.`users` WHERE (email = ?)", email).Scan(&user.UserID, &user.Name, &user.Email, &user.Password)
+	if user.UserID == 0 {
+		fmt.Println("No such user exists!")
+		return nil
+	}
+
+	comparePasswords := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if comparePasswords != nil {
+		fmt.Println("Wrong Credentials, Try again!")
+		return nil
+	}
+
+	returningUser := NewUser{UserID: user.UserID, Name: user.Name , Email: user.Email,}
+	return &returningUser
 }

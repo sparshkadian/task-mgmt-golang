@@ -25,3 +25,23 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(newUser)
 }
+
+func Login(w http.ResponseWriter, r *http.Request){
+	bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("Error Reading request body", err)
+		return 
+	}
+
+	var user models.User
+	err = json.Unmarshal(bytes, &user)
+	if err != nil {
+		fmt.Println("Error unmarshaling data", err)
+		return 
+	}
+
+	userDetails := user.LoginDB()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(userDetails)
+}
